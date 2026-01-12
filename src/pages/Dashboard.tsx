@@ -1,51 +1,110 @@
-import { GraduationCap, Users, TrendingUp, Calendar } from "lucide-react";
+import { useSchool } from "@/contexts/SchoolContext";
 import { StatCard } from "@/components/ui/stat-card";
-import { students, teachers } from "@/data/mockData";
+import {
+  Users,
+  GraduationCap,
+  Clock,
+  AlertTriangle,
+  Banknote,
+  TrendingUp,
+  CheckCircle,
+} from "lucide-react";
 
 export function Dashboard() {
-  const totalStudents = students.length;
-  const totalTeachers = teachers.length;
-  
-  // Calculate average attendance
-  const studentAttendance = students.reduce((acc, student) => {
-    const presentDays = student.attendance.filter(a => a.present).length;
-    return acc + (presentDays / student.attendance.length) * 100;
-  }, 0) / students.length;
+  const { data, isLoading } = useSchool();
 
-  const teacherAttendance = teachers.reduce((acc, teacher) => {
-    const presentDays = teacher.attendance.filter(a => a.present).length;
-    return acc + (presentDays / teacher.attendance.length) * 100;
-  }, 0) / teachers.length;
+  if (isLoading || !data) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-muted-foreground">Yuklanmoqda...</div>
+      </div>
+    );
+  }
 
-  // Calculate average grade
-  const averageGrade = students.reduce((acc, student) => {
-    const avg = student.grades.reduce((sum, g) => sum + g.grade, 0) / student.grades.length;
-    return acc + avg;
-  }, 0) / students.length;
+  const today = new Date().toISOString().split("T")[0];
+
+  // Staff statistics
+  const totalStaff = data.staff.length;
+  const staffPresentToday = data.staff.filter((s) => {
+    const todayAttendance = s.attendance.find((a) => a.date === today);
+    return todayAttendance?.status === "keldi" || todayAttendance?.status === "kech_qoldi";
+  }).length;
+  const staffLateToday = data.staff.filter((s) => {
+    const todayAttendance = s.attendance.find((a) => a.date === today);
+    return todayAttendance?.status === "kech_qoldi";
+  }).length;
+
+  // Student statistics
+  const totalStudents = data.students.length;
+  const studentsPresentToday = data.students.filter((s) => {
+    const todayAttendance = s.attendance.find((a) => a.date === today);
+    return todayAttendance?.present === true;
+  }).length;
+
+  // Average salary
+  const averageSalary =
+    data.staff.filter((s) => s.salaryActive).reduce((sum, s) => sum + s.salary, 0) /
+    Math.max(data.staff.filter((s) => s.salaryActive).length, 1);
+
+  // Average grade
+  const allGrades = data.students.flatMap((s) => s.grades.map((g) => g.grade));
+  const averageGrade = allGrades.length > 0 
+    ? allGrades.reduce((sum, g) => sum + g, 0) / allGrades.length 
+    : 0;
+
+  const formatSalary = (amount: number) => {
+    return new Intl.NumberFormat("uz-UZ").format(amount) + " so'm";
+  };
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div className="animate-fade-in">
-        <h1 className="text-3xl font-bold text-foreground">Bosh sahifa</h1>
+        <h1 className="text-3xl font-bold text-foreground">Boshqaruv paneli</h1>
         <p className="mt-2 text-muted-foreground">
           Xush kelibsiz! Maktab statistikasi quyida ko'rsatilgan.
         </p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Jami xodimlar"
+          value={totalStaff}
+          icon={<Users className="h-6 w-6" />}
+          variant="primary"
+        />
+        <StatCard
+          title="Bugun kelgan xodimlar"
+          value={staffPresentToday}
+          icon={<CheckCircle className="h-6 w-6" />}
+          variant="success"
+        />
+        <StatCard
+          title="Kech qolgan xodimlar"
+          value={staffLateToday}
+          icon={<AlertTriangle className="h-6 w-6" />}
+          variant="warning"
+        />
         <StatCard
           title="Jami o'quvchilar"
           value={totalStudents}
           icon={<GraduationCap className="h-6 w-6" />}
           variant="primary"
         />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          title="O'qituvchilar"
-          value={totalTeachers}
-          icon={<Users className="h-6 w-6" />}
+          title="Bugun kelgan o'quvchilar"
+          value={studentsPresentToday}
+          icon={<CheckCircle className="h-6 w-6" />}
           variant="success"
+        />
+        <StatCard
+          title="O'rtacha oylik"
+          value={formatSalary(averageSalary)}
+          icon={<Banknote className="h-6 w-6" />}
         />
         <StatCard
           title="O'rtacha baho"
@@ -53,83 +112,91 @@ export function Dashboard() {
           icon={<TrendingUp className="h-6 w-6" />}
           trend={{ value: 5, isPositive: true }}
         />
-        <StatCard
-          title="Davomat"
-          value={`${studentAttendance.toFixed(0)}%`}
-          icon={<Calendar className="h-6 w-6" />}
-          trend={{ value: 2, isPositive: true }}
-        />
       </div>
 
       {/* Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Top Students */}
-        <div className="animate-slide-up rounded-xl bg-card p-6 shadow-card">
+        {/* Recent Announcements */}
+        <div className="animate-slide-up rounded-xl bg-card p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-card-foreground">
-            Eng yaxshi o'quvchilar
+            So'nggi e'lonlar
           </h2>
           <div className="space-y-4">
-            {students
-              .map(s => ({
-                ...s,
-                avg: s.grades.reduce((sum, g) => sum + g.grade, 0) / s.grades.length
-              }))
-              .sort((a, b) => b.avg - a.avg)
-              .slice(0, 3)
-              .map((student, index) => (
-                <div
-                  key={student.id}
-                  className="flex items-center justify-between rounded-lg bg-muted/50 p-4"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                      index === 0 ? 'bg-warning text-warning-foreground' :
-                      index === 1 ? 'bg-muted-foreground/20 text-muted-foreground' :
-                      'bg-warning/30 text-warning'
-                    } font-bold`}>
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-medium text-card-foreground">{student.name}</p>
-                      <p className="text-sm text-muted-foreground">{student.class}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-primary">{student.avg.toFixed(1)}</p>
-                    <p className="text-xs text-muted-foreground">o'rtacha</p>
-                  </div>
+            {data.announcements.slice(0, 3).map((announcement) => (
+              <div
+                key={announcement.id}
+                className="rounded-lg bg-muted/50 p-4"
+              >
+                <div className="flex items-start justify-between">
+                  <h3 className="font-medium text-card-foreground">
+                    {announcement.title}
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(announcement.date).toLocaleDateString("uz-UZ")}
+                  </span>
                 </div>
-              ))}
+                <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
+                  {announcement.content}
+                </p>
+              </div>
+            ))}
+            {data.announcements.length === 0 && (
+              <p className="text-muted-foreground">Hozircha e'lonlar yo'q</p>
+            )}
           </div>
         </div>
 
-        {/* Teacher Attendance */}
-        <div className="animate-slide-up rounded-xl bg-card p-6 shadow-card" style={{ animationDelay: "0.1s" }}>
+        {/* Staff Attendance Today */}
+        <div className="animate-slide-up rounded-xl bg-card p-6 shadow-sm" style={{ animationDelay: "0.1s" }}>
           <h2 className="mb-4 text-lg font-semibold text-card-foreground">
-            O'qituvchilar davomati
+            Bugungi xodimlar davomati
           </h2>
-          <div className="space-y-4">
-            {teachers.map((teacher) => {
-              const presentDays = teacher.attendance.filter(a => a.present).length;
-              const totalDays = teacher.attendance.length;
-              const percentage = (presentDays / totalDays) * 100;
-              
+          <div className="space-y-3">
+            {data.staff.map((staff) => {
+              const todayAttendance = staff.attendance.find((a) => a.date === today);
+              const status = todayAttendance?.status || "kelmadi";
+              const arrivalTime = todayAttendance?.arrivalTime;
+
               return (
-                <div key={teacher.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-card-foreground">{teacher.name}</p>
-                      <p className="text-sm text-muted-foreground">{teacher.subject}</p>
-                    </div>
-                    <span className="text-sm font-medium text-primary">
-                      {percentage.toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  key={staff.id}
+                  className="flex items-center justify-between rounded-lg bg-muted/50 p-3"
+                >
+                  <div className="flex items-center gap-3">
                     <div
-                      className="h-full rounded-full bg-primary transition-all duration-500"
-                      style={{ width: `${percentage}%` }}
+                      className={`h-3 w-3 rounded-full ${
+                        status === "keldi"
+                          ? "bg-success"
+                          : status === "kech_qoldi"
+                          ? "bg-warning"
+                          : "bg-destructive"
+                      }`}
                     />
+                    <div>
+                      <p className="text-sm font-medium text-card-foreground">
+                        {staff.fullName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {staff.position}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {arrivalTime ? (
+                      <div className="flex items-center gap-1 text-sm">
+                        <Clock className="h-3 w-3" />
+                        {arrivalTime}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Kelmagan
+                      </span>
+                    )}
+                    {status === "kech_qoldi" && todayAttendance?.lateMinutes && (
+                      <p className="text-xs text-warning">
+                        +{todayAttendance.lateMinutes} daqiqa
+                      </p>
+                    )}
                   </div>
                 </div>
               );
